@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -29,6 +30,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -43,6 +45,7 @@ import com.chate.thesis.ui.HeaderSurfaceView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.color.DynamicColors
@@ -69,6 +72,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var compositeScoreText: TextView
     private lateinit var ocsvmScoreText: TextView
     private lateinit var mahalScoreText: TextView
+
+    // Onboarding Guide Card ("Are you new here?")
+    private lateinit var cardNewUserGuide: MaterialCardView
+    private lateinit var guideTagText: TextView
+    private lateinit var guideStatusIcon: ImageView
+    private lateinit var guideTitleText: TextView
+    private lateinit var guideDescriptionText: TextView
+    private lateinit var guideStepsContainer: View
+    private lateinit var btnGuideStartEnrollment: MaterialButton
 
     // Security Control Cards (Live Verifier & Enforcer Policy)
     private lateinit var btnGridVerifier: View
@@ -175,12 +187,15 @@ class MainActivity : AppCompatActivity() {
     // 4. LOGS TAB UI ELEMENTS
     private lateinit var logCountText: TextView
     private lateinit var logSearchInput: EditText
+    private lateinit var logFilterChipGroup: ChipGroup
     private lateinit var chipFilterAll: Chip
     private lateinit var chipFilterAllow: Chip
     private lateinit var chipFilterWarn: Chip
     private lateinit var chipFilterStepUp: Chip
     private lateinit var chipFilterBlock: Chip
     private lateinit var eventLogRecyclerView: RecyclerView
+    private lateinit var eventLogEmptyView: View
+    private lateinit var eventLogEmptyText: TextView
     private lateinit var eventLogAdapter: EventLogAdapter
 
     // Core Managers & Engines
@@ -334,6 +349,14 @@ class MainActivity : AppCompatActivity() {
         ocsvmScoreText = findViewById(R.id.ocsvmScoreText)
         mahalScoreText = findViewById(R.id.mahalScoreText)
 
+        cardNewUserGuide = findViewById(R.id.cardNewUserGuide)
+        guideTagText = findViewById(R.id.guideTagText)
+        guideStatusIcon = findViewById(R.id.guideStatusIcon)
+        guideTitleText = findViewById(R.id.guideTitleText)
+        guideDescriptionText = findViewById(R.id.guideDescriptionText)
+        guideStepsContainer = findViewById(R.id.guideStepsContainer)
+        btnGuideStartEnrollment = findViewById(R.id.btnGuideStartEnrollment)
+
         btnGridVerifier = findViewById(R.id.btnGridVerifier)
         gridVerifierStatusText = findViewById(R.id.gridVerifierStatusText)
         masterSwitch = findViewById(R.id.masterSwitch)
@@ -434,12 +457,15 @@ class MainActivity : AppCompatActivity() {
         // Logs Tab
         logCountText = findViewById(R.id.logCountText)
         logSearchInput = findViewById(R.id.logSearchInput)
+        logFilterChipGroup = findViewById(R.id.logFilterChipGroup)
         chipFilterAll = findViewById(R.id.chipFilterAll)
         chipFilterAllow = findViewById(R.id.chipFilterAllow)
         chipFilterWarn = findViewById(R.id.chipFilterWarn)
         chipFilterStepUp = findViewById(R.id.chipFilterStepUp)
         chipFilterBlock = findViewById(R.id.chipFilterBlock)
         eventLogRecyclerView = findViewById(R.id.eventLogRecyclerView)
+        eventLogEmptyView = findViewById(R.id.eventLogEmptyView)
+        eventLogEmptyText = findViewById(R.id.eventLogEmptyText)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -494,6 +520,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupHomeTab() {
+        val openEnrollment = {
+            bottomNavigation.selectedItemId = R.id.nav_enrollment
+        }
+        cardNewUserGuide.setOnClickListener { openEnrollment() }
+        btnGuideStartEnrollment.setOnClickListener { openEnrollment() }
+
         val showKeyboardForSandbox = {
             testInput.requestFocus()
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -541,6 +573,7 @@ class MainActivity : AppCompatActivity() {
                 masterSwitch.isChecked = false
                 gridVerifierStatusText.text = if (profile == null) "Standby · No Enrolled Profile" else "Standby · Calibrating"
                 Toast.makeText(this, "Profile not ready. Complete enrollment first.", Toast.LENGTH_SHORT).show()
+                bottomNavigation.selectedItemId = R.id.nav_enrollment
             }
         }
 
@@ -551,6 +584,7 @@ class MainActivity : AppCompatActivity() {
                 val profile = profileManager.getProfile(DEFAULT_USER_ID)
                 val msg = if (profile == null) "No enrolled profile. Complete enrollment first." else "Profile not ready. Complete enrollment first."
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                bottomNavigation.selectedItemId = R.id.nav_enrollment
             }
         }
 
@@ -1261,11 +1295,21 @@ class MainActivity : AppCompatActivity() {
         eventLogRecyclerView.layoutManager = LinearLayoutManager(this)
         eventLogRecyclerView.adapter = eventLogAdapter
 
-        chipFilterAll.setOnClickListener { setLogFilter("ALL") }
-        chipFilterAllow.setOnClickListener { setLogFilter("ALLOW") }
-        chipFilterWarn.setOnClickListener { setLogFilter("WARN") }
-        chipFilterStepUp.setOnClickListener { setLogFilter("STEP_UP_AUTH") }
-        chipFilterBlock.setOnClickListener { setLogFilter("BLOCK_SESSION") }
+        logFilterChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            val checkedId = checkedIds.firstOrNull() ?: R.id.chipFilterAll
+            val filter =
+                when (checkedId) {
+                    R.id.chipFilterAllow -> "ALLOW"
+                    R.id.chipFilterWarn -> "WARN"
+                    R.id.chipFilterStepUp -> "STEP_UP_AUTH"
+                    R.id.chipFilterBlock -> "BLOCK_SESSION"
+                    else -> "ALL"
+                }
+            if (currentFilter != filter) {
+                currentFilter = filter
+                applyLogFilters()
+            }
+        }
 
         logSearchInput.addTextChangedListener(
             object : TextWatcher {
@@ -1293,11 +1337,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setLogFilter(filter: String) {
         currentFilter = filter
-        chipFilterAll.isChecked = filter == "ALL"
-        chipFilterAllow.isChecked = filter == "ALLOW"
-        chipFilterWarn.isChecked = filter == "WARN"
-        chipFilterStepUp.isChecked = filter == "STEP_UP_AUTH"
-        chipFilterBlock.isChecked = filter == "BLOCK_SESSION"
+        val targetId =
+            when (filter) {
+                "ALLOW" -> R.id.chipFilterAllow
+                "WARN" -> R.id.chipFilterWarn
+                "STEP_UP_AUTH" -> R.id.chipFilterStepUp
+                "BLOCK_SESSION" -> R.id.chipFilterBlock
+                else -> R.id.chipFilterAll
+            }
+        logFilterChipGroup.check(targetId)
         applyLogFilters()
     }
 
@@ -1309,18 +1357,42 @@ class MainActivity : AppCompatActivity() {
     private fun applyLogFilters() {
         var filtered = allLogs
         if (currentFilter != "ALL") {
-            filtered = filtered.filter { it.action == currentFilter }
+            filtered = filtered.filter { Action.normalize(it.action) == currentFilter }
         }
         if (currentSearchQuery.isNotEmpty()) {
             filtered =
                 filtered.filter {
+                    val norm = Action.normalize(it.action)
                     (it.action?.contains(currentSearchQuery, ignoreCase = true) == true) ||
+                        (norm.contains(currentSearchQuery, ignoreCase = true)) ||
                         (it.eventType.contains(currentSearchQuery, ignoreCase = true)) ||
                         (it.payload.contains(currentSearchQuery, ignoreCase = true))
                 }
         }
         eventLogAdapter.updateLogs(filtered)
         logCountText.text = "${filtered.size} of ${allLogs.size} events"
+
+        if (filtered.isEmpty()) {
+            eventLogRecyclerView.visibility = View.GONE
+            eventLogEmptyView.visibility = View.VISIBLE
+            eventLogEmptyText.text =
+                if (allLogs.isEmpty()) {
+                    "No security events recorded yet"
+                } else if (currentSearchQuery.isNotEmpty()) {
+                    "No events matching \"$currentSearchQuery\""
+                } else {
+                    val label =
+                        when (currentFilter) {
+                            "STEP_UP_AUTH" -> "STEP-UP"
+                            "BLOCK_SESSION" -> "BLOCK"
+                            else -> currentFilter
+                        }
+                    "No $label events found"
+                }
+        } else {
+            eventLogRecyclerView.visibility = View.VISIBLE
+            eventLogEmptyView.visibility = View.GONE
+        }
     }
 
     private fun refreshProfileDisplay() {
@@ -1373,7 +1445,45 @@ class MainActivity : AppCompatActivity() {
             masterSwitch.isChecked = false
             gridVerifierStatusText.text = "Standby · No Enrolled Profile"
         }
+        updateGuideCard(profile)
         syncKeyboardSettingsUI()
+    }
+
+    private fun updateGuideCard(profile: UserProfile?) {
+        if (!::cardNewUserGuide.isInitialized) return
+
+        if (profile == null) {
+            guideTagText.text = "NEW RESPONDENT SETUP"
+            guideTagText.setTextColor(ContextCompat.getColor(this, R.color.md_theme_primary))
+            guideTagText.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.md_theme_primaryContainer))
+            guideTitleText.text = "Are you new here?"
+            guideDescriptionText.text = "Follow our 3-step setup to enable the keyboard, calibrate your unique typing rhythm, and activate continuous verification."
+            guideStepsContainer.visibility = View.VISIBLE
+            btnGuideStartEnrollment.text = "Start Setup & Enrollment →"
+            guideStatusIcon.setImageResource(R.drawable.ic_arrow_forward)
+            guideStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.md_theme_primary))
+        } else if (!profile.isReady) {
+            val progress = profile.progressPct.toInt().coerceIn(0, 100)
+            guideTagText.text = "SETUP IN PROGRESS ($progress%)"
+            guideTagText.setTextColor(ContextCompat.getColor(this, R.color.risk_warn))
+            guideTagText.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.risk_warn_bg))
+            guideTitleText.text = "Continue your setup"
+            guideDescriptionText.text = "You have recorded ${profile.keystrokeCount} of ${profile.minKeystrokes} keystrokes. Complete the typing challenge to arm the verification engine."
+            guideStepsContainer.visibility = View.GONE
+            btnGuideStartEnrollment.text = "Resume Enrollment ($progress%) →"
+            guideStatusIcon.setImageResource(R.drawable.ic_arrow_forward)
+            guideStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.risk_warn))
+        } else {
+            guideTagText.text = "SETUP COMPLETED"
+            guideTagText.setTextColor(ContextCompat.getColor(this, R.color.risk_allow))
+            guideTagText.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.risk_allow_bg))
+            guideTitleText.text = "Biometric Profile Calibrated"
+            guideDescriptionText.text = "Your typing rhythm profile is calibrated and active. Live continuous verification is ready to monitor typing rhythm anomalies."
+            guideStepsContainer.visibility = View.GONE
+            btnGuideStartEnrollment.text = "Review or Recalibrate Profile →"
+            guideStatusIcon.setImageResource(R.drawable.ic_check_circle)
+            guideStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.risk_allow))
+        }
     }
 
     private fun updateRiskDisplay(
@@ -1386,10 +1496,16 @@ class MainActivity : AppCompatActivity() {
         compositeScoreText.text = String.format("%.3f", composite)
         ocsvmScoreText.text = String.format("%.3f", ocsvm)
         mahalScoreText.text = String.format("%.3f", mahal)
-        actionText.text = action
+        val normalizedAction = Action.normalize(action)
+        actionText.text =
+            when (normalizedAction) {
+                "STEP_UP_AUTH" -> "STEP-UP"
+                "BLOCK_SESSION" -> "BLOCK"
+                else -> normalizedAction
+            }
 
         val (textColor, bgColor) =
-            when (action) {
+            when (normalizedAction) {
                 "ALLOW" -> Pair(R.color.risk_allow, R.color.risk_allow_bg)
                 "WARN" -> Pair(R.color.risk_warn, R.color.risk_warn_bg)
                 "STEP_UP_AUTH" -> Pair(R.color.risk_step_up, R.color.risk_step_up_bg)
@@ -1431,13 +1547,21 @@ class MainActivity : AppCompatActivity() {
             masterSwitch.isEnabled = true
             Toast.makeText(this, "🎉 Biometric Profile Calibrated!", Toast.LENGTH_LONG).show()
         }
+        updateGuideCard(profile)
     }
 
     private fun updateRecentActivityTimeline() {
         val logs = securityLogger.readAll(DEFAULT_USER_ID).reversed()
         if (logs.isNotEmpty()) {
             val latest = logs[0]
-            timelineEvent1Title.text = "${latest.action ?: "LOG"}: ${latest.eventType}"
+            val normAction = Action.normalize(latest.action)
+            val displayAction =
+                when (normAction) {
+                    "STEP_UP_AUTH" -> "STEP-UP"
+                    "BLOCK_SESSION" -> "BLOCK"
+                    else -> normAction
+                }
+            timelineEvent1Title.text = "$displayAction: ${latest.eventType}"
             timelineEvent1Details.text = "Score: ${latest.riskScore?.let { String.format("%.3f", it) } ?: "N/A"} · ${latest.timestamp.take(16)}"
         } else {
             timelineEvent1Title.text = "Zero-trust engine active"
@@ -1446,7 +1570,14 @@ class MainActivity : AppCompatActivity() {
 
         if (logs.size > 1) {
             val second = logs[1]
-            timelineEvent2Title.text = "${second.action ?: "LOG"}: ${second.eventType}"
+            val normAction = Action.normalize(second.action)
+            val displayAction =
+                when (normAction) {
+                    "STEP_UP_AUTH" -> "STEP-UP"
+                    "BLOCK_SESSION" -> "BLOCK"
+                    else -> normAction
+                }
+            timelineEvent2Title.text = "$displayAction: ${second.eventType}"
             timelineEvent2Details.text = "Score: ${second.riskScore?.let { String.format("%.3f", it) } ?: "N/A"} · ${second.timestamp.take(16)}"
         } else {
             timelineEvent2Title.text = "Biometric models on standby"

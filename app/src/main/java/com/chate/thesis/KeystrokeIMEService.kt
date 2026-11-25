@@ -893,13 +893,11 @@ class KeystrokeIMEService : InputMethodService() {
         allowRepeat: Boolean,
         commitAction: () -> Unit,
     ) {
-        val currentTime = event.eventTime.toDouble()
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 triggerKeyFeedback(view, keyCode)
                 view.isPressed = true
                 cancelAllRunnables()
-                eventBuffer.add(KeystrokeEvent(keyCode, 0, currentTime))
 
                 if (allowRepeat) {
                     val repeatInterval = preferences.repeatIntervalMs
@@ -912,8 +910,6 @@ class KeystrokeIMEService : InputMethodService() {
                                     override fun run() {
                                         commitAction()
                                         triggerKeyFeedback(view, keyCode)
-                                        eventBuffer.add(KeystrokeEvent(keyCode, 0, SystemClock.uptimeMillis().toDouble()))
-                                        eventBuffer.add(KeystrokeEvent(keyCode, 1, (SystemClock.uptimeMillis() + 15).toDouble()))
                                         mainHandler.postDelayed(this, repeatInterval)
                                     }
                                 }
@@ -930,8 +926,6 @@ class KeystrokeIMEService : InputMethodService() {
                     commitAction()
                 }
                 isRapidFiring = false
-                eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
-                checkAndFlush()
             }
             MotionEvent.ACTION_CANCEL -> {
                 cancelAllRunnables()
@@ -945,14 +939,12 @@ class KeystrokeIMEService : InputMethodService() {
         view: View,
         event: MotionEvent,
     ) {
-        val currentTime = event.eventTime.toDouble()
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 triggerKeyFeedback(view, KeyEvent.KEYCODE_DEL)
                 view.isPressed = true
                 cancelAllRunnables()
                 currentInputConnection?.deleteSurroundingText(1, 0)
-                eventBuffer.add(KeystrokeEvent(KeyEvent.KEYCODE_DEL, 0, currentTime))
 
                 // Delete key ALWAYS supports rapid-fire auto-repeat!
                 val delay = preferences.longPressDelayMs
@@ -965,9 +957,6 @@ class KeystrokeIMEService : InputMethodService() {
                                 override fun run() {
                                     currentInputConnection?.deleteSurroundingText(1, 0)
                                     triggerKeyFeedback(view, KeyEvent.KEYCODE_DEL)
-                                    val now = SystemClock.uptimeMillis().toDouble()
-                                    eventBuffer.add(KeystrokeEvent(KeyEvent.KEYCODE_DEL, 0, now))
-                                    eventBuffer.add(KeystrokeEvent(KeyEvent.KEYCODE_DEL, 1, now + 10))
                                     mainHandler.postDelayed(this, repeatInterval)
                                 }
                             }
@@ -979,8 +968,6 @@ class KeystrokeIMEService : InputMethodService() {
                 cancelAllRunnables()
                 isRapidFiring = false
                 view.isPressed = false
-                eventBuffer.add(KeystrokeEvent(KeyEvent.KEYCODE_DEL, 1, currentTime))
-                checkAndFlush()
             }
             MotionEvent.ACTION_CANCEL -> {
                 cancelAllRunnables()
@@ -988,6 +975,19 @@ class KeystrokeIMEService : InputMethodService() {
                 view.isPressed = false
             }
         }
+    }
+
+    private fun isLetterOrDigitKey(
+        keyCode: Int,
+        keyChar: String? = null,
+    ): Boolean {
+        if (!keyChar.isNullOrEmpty()) {
+            if (keyChar.length == 1) {
+                return keyChar[0].isLetterOrDigit()
+            }
+            return false
+        }
+        return FeatureExtractor.isLetterOrDigitKeyCode(keyCode)
     }
 
     private fun processKeyGesture(
@@ -999,6 +999,8 @@ class KeystrokeIMEService : InputMethodService() {
         commitAction: () -> Unit,
     ) {
         val currentTime = event.eventTime.toDouble()
+        val isTrackable = isLetterOrDigitKey(keyCode, keyChar)
+
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 triggerKeyFeedback(view, keyCode)
@@ -1010,7 +1012,9 @@ class KeystrokeIMEService : InputMethodService() {
                 initialTouchX = event.x
                 initialTouchY = event.y
 
-                eventBuffer.add(KeystrokeEvent(keyCode, 0, currentTime))
+                if (isTrackable) {
+                    eventBuffer.add(KeystrokeEvent(keyCode, 0, currentTime))
+                }
                 val outputChar = if (isShifted && !isSymbols && keyChar.length == 1 && keyChar[0].isLetter()) keyChar.uppercase() else keyChar
                 showKeyPreview(view, outputChar)
 
@@ -1033,9 +1037,11 @@ class KeystrokeIMEService : InputMethodService() {
                                     override fun run() {
                                         commitAction()
                                         triggerKeyFeedback(view, keyCode)
-                                        val now = SystemClock.uptimeMillis().toDouble()
-                                        eventBuffer.add(KeystrokeEvent(keyCode, 0, now))
-                                        eventBuffer.add(KeystrokeEvent(keyCode, 1, now + 15))
+                                        if (isTrackable) {
+                                            val now = SystemClock.uptimeMillis().toDouble()
+                                            eventBuffer.add(KeystrokeEvent(keyCode, 0, now))
+                                            eventBuffer.add(KeystrokeEvent(keyCode, 1, now + 15))
+                                        }
                                         mainHandler.postDelayed(this, repeatInterval)
                                     }
                                 }
@@ -1073,8 +1079,11 @@ class KeystrokeIMEService : InputMethodService() {
                     } else {
                         commitAction()
                     }
-                    eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
-                    checkAndFlush()
+                    val finalChar = chosen ?: keyChar
+                    if (isLetterOrDigitKey(keyCode, finalChar)) {
+                        eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
+                        checkAndFlush()
+                    }
 
                     if (capsMode == CapsMode.ON_ONCE) {
                         capsMode = CapsMode.OFF
@@ -1082,8 +1091,10 @@ class KeystrokeIMEService : InputMethodService() {
                     }
                 } else if (isRapidFiring) {
                     isRapidFiring = false
-                    eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
-                    checkAndFlush()
+                    if (isTrackable) {
+                        eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
+                        checkAndFlush()
+                    }
 
                     if (capsMode == CapsMode.ON_ONCE) {
                         capsMode = CapsMode.OFF
@@ -1092,8 +1103,10 @@ class KeystrokeIMEService : InputMethodService() {
                 } else {
                     // Normal tap
                     commitAction()
-                    eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
-                    checkAndFlush()
+                    if (isTrackable) {
+                        eventBuffer.add(KeystrokeEvent(keyCode, 1, currentTime))
+                        checkAndFlush()
+                    }
 
                     if (capsMode == CapsMode.ON_ONCE) {
                         capsMode = CapsMode.OFF
@@ -1108,6 +1121,12 @@ class KeystrokeIMEService : InputMethodService() {
                 isRapidFiring = false
                 isLongPressActive = false
                 view.isPressed = false
+                if (isTrackable) {
+                    val lastDown = eventBuffer.findLast { it.keyCode == keyCode && it.eventType == 0 }
+                    if (lastDown != null) {
+                        eventBuffer.remove(lastDown)
+                    }
+                }
             }
         }
     }
@@ -1542,7 +1561,7 @@ class KeystrokeIMEService : InputMethodService() {
             eventType = "AUTH_EVALUATION",
             payload = com.google.gson.Gson().toJson(payload),
             riskScore = decision.compositeScore,
-            action = decision.action.displayName,
+            action = decision.action.name,
         )
 
         // Broadcast to Activity
@@ -1552,7 +1571,7 @@ class KeystrokeIMEService : InputMethodService() {
                 putExtra("composite_score", decision.compositeScore)
                 putExtra("ocsvm_score", decision.ocsvmScore)
                 putExtra("mahal_score", decision.mahalScore)
-                putExtra("action", decision.action.displayName)
+                putExtra("action", decision.action.name)
                 putExtra("keystroke_count", profile?.keystrokeCount ?: 0)
             }
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)

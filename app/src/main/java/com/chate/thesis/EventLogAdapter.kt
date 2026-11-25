@@ -37,11 +37,18 @@ class EventLogAdapter(private var logs: List<LogEntry>) : RecyclerView.Adapter<E
         val log = logs[position]
         val context = holder.itemView.context
 
-        val actionStr = log.action ?: "LOG"
-        holder.logActionBadge.text = actionStr
+        val rawAction = log.action ?: "LOG"
+        val normalizedAction = Action.normalize(rawAction)
+
+        val displayBadge = when (normalizedAction) {
+            "STEP_UP_AUTH" -> "STEP_UP"
+            "BLOCK_SESSION" -> "BLOCK"
+            else -> normalizedAction
+        }
+        holder.logActionBadge.text = displayBadge
 
         val (textColor, bgColor) =
-            when (actionStr) {
+            when (normalizedAction) {
                 "ALLOW" -> Pair(R.color.risk_allow, R.color.risk_allow_bg)
                 "WARN" -> Pair(R.color.risk_warn, R.color.risk_warn_bg)
                 "STEP_UP_AUTH" -> Pair(R.color.risk_step_up, R.color.risk_step_up_bg)

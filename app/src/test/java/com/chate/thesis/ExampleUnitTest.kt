@@ -1,5 +1,6 @@
 package com.chate.thesis
 
+import android.view.KeyEvent
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -20,26 +21,26 @@ class ExampleUnitTest {
         val events = mutableListOf<KeystrokeEvent>()
         var t = 1000.0
 
-        // 1st key: normal dwell 80ms
-        events.add(KeystrokeEvent(1, 0, t))
+        // 1st key: normal dwell 80ms ('A')
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_A, 0, t))
         t += 80.0
-        events.add(KeystrokeEvent(1, 1, t))
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_A, 1, t))
 
         // Normal flight 120ms
         t += 120.0
 
-        // 2nd key: normal dwell 90ms
-        events.add(KeystrokeEvent(2, 0, t))
+        // 2nd key: normal dwell 90ms ('B')
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_B, 0, t))
         t += 90.0
-        events.add(KeystrokeEvent(2, 1, t))
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_B, 1, t))
 
         // Inter-word pause of 1500ms
         t += 1500.0
 
-        // 3rd key: normal dwell 85ms
-        events.add(KeystrokeEvent(3, 0, t))
+        // 3rd key: normal dwell 85ms ('C')
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_C, 0, t))
         t += 85.0
-        events.add(KeystrokeEvent(3, 1, t))
+        events.add(KeystrokeEvent(KeyEvent.KEYCODE_C, 1, t))
 
         val fv = extractor.extract(events)
         assertNotNull(fv)

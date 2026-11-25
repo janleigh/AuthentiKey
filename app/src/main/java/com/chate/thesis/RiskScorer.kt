@@ -25,7 +25,29 @@ enum class Action(val displayName: String) {
     ALLOW("Allow"),
     WARN("Warn"),
     STEP_UP_AUTH("Step-Up Authentication"),
-    BLOCK_SESSION("Block Session"),
+    BLOCK_SESSION("Block Session");
+
+    companion object {
+        fun from(raw: String?): Action? {
+            if (raw == null) return null
+            val trimmed = raw.trim()
+            return when {
+                trimmed.equals("ALLOW", ignoreCase = true) -> ALLOW
+                trimmed.equals("WARN", ignoreCase = true) -> WARN
+                trimmed.equals("STEP_UP_AUTH", ignoreCase = true) ||
+                    trimmed.equals("STEP_UP", ignoreCase = true) ||
+                    trimmed.contains("Step-Up", ignoreCase = true) -> STEP_UP_AUTH
+                trimmed.equals("BLOCK_SESSION", ignoreCase = true) ||
+                    trimmed.equals("BLOCK", ignoreCase = true) ||
+                    trimmed.contains("Block", ignoreCase = true) -> BLOCK_SESSION
+                else -> null
+            }
+        }
+
+        fun normalize(raw: String?): String {
+            return from(raw)?.name ?: (raw?.trim()?.uppercase() ?: "UNKNOWN")
+        }
+    }
 }
 
 // ====================================================================== //

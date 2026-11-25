@@ -42,7 +42,11 @@ class FeatureExtractor {
     fun extract(events: List<KeystrokeEvent>): FeatureVector? {
         if (events.isEmpty()) return null
 
-        val sortedEvents = events.sortedBy { it.timestampMs }
+        // Only include events corresponding to letters or numbers
+        val validEvents = events.filter { isLetterOrDigitKeyCode(it.keyCode) }
+        if (validEvents.isEmpty()) return null
+
+        val sortedEvents = validEvents.sortedBy { it.timestampMs }
 
         data class PairedKey(val keyCode: Int, val downTs: Double, val upTs: Double)
         val pairedKeys = mutableListOf<PairedKey>()
@@ -103,6 +107,17 @@ class FeatureExtractor {
         const val MIN_FLIGHT_MS = -300.0
         const val MAX_FLIGHT_MS = 1200.0
         const val MAX_IKI_MS = 1500.0
+
+        /**
+         * Checks whether a KeyEvent key code corresponds to a letter (A-Z) or a number (0-9).
+         * Key codes match Android's KeyEvent constants:
+         * - KEYCODE_0 (7) .. KEYCODE_9 (16)
+         * - KEYCODE_A (29) .. KEYCODE_Z (54)
+         * - KEYCODE_NUMPAD_0 (144) .. KEYCODE_NUMPAD_9 (153)
+         */
+        fun isLetterOrDigitKeyCode(keyCode: Int): Boolean {
+            return (keyCode in 29..54) || (keyCode in 7..16) || (keyCode in 144..153)
+        }
     }
 
     private fun computeStats(fv: FeatureVector) {
